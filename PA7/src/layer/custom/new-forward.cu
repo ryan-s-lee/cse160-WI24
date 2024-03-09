@@ -35,11 +35,11 @@ __global__ void conv_forward_kernel(float *y, const float *x, const float *k,
 
   // map threadidx to b, m, h_out, w_out
   int b, m, h_out, w_out, c, p, q;
-  b = blockIdx.x;
+  m = blockIdx.x;
   h_out = blockIdx.y * TILE_WIDTH + threadIdx.y;
   w_out = blockIdx.x * TILE_WIDTH + threadIdx.x;
   if (h_out > H_out || w_out > W_out) return;
-  m = blockIdx.z;
+  b = blockIdx.z;
   float accum = 0.0;
   for (c = 0; c < C; ++c) {
     for (p = 0; p < K; ++p) {
@@ -80,7 +80,7 @@ __host__ void GPUInterface::conv_forward_gpu_prolog(
   const int H_out = H - (K - 1);
   const int W_out = W - (K - 1);
   y_sz = sizeof(float) * B * H_out * W_out * M;
-  k_sz = y_sz * C * K * K;
+  k_sz = sizeof(float) * M * C * K * K;
   cudaMalloc(device_x_ptr, x_sz);
   cudaMalloc(device_y_ptr, y_sz);
   cudaMalloc(device_k_ptr, k_sz);
