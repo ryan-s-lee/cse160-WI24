@@ -34,10 +34,14 @@ __global__ void conv_forward_kernel(float *y, const float *x, const float *k,
   k[(i3) * (C * K * K) + (i2) * (K * K) + (i1) * (K) + i0]
 
   // map threadidx to b, m, h_out, w_out
-  int b, m, h_out, w_out, c, p, q;
+  int b, m, h_grid, w_grid, h_out, w_out, c, p, q;
   m = blockIdx.x;
-  h_out = blockIdx.y * TILE_WIDTH + threadIdx.y;
-  w_out = blockIdx.x * TILE_WIDTH + threadIdx.x;
+  // compute the tile width of the image - how many tiles would fit across the image's width
+  int img_tile_width = ceil_div(W, TILE_WIDTH);
+  h_grid = threadIdx.y / img_tile_width;
+  w_grid = threadIdx.y % img_tile_width;
+  h_out = h_grid * TILE_WIDTH + threadIdx.y;
+  w_out = w_grid * TILE_WIDTH + threadIdx.x;
   if (h_out > H_out || w_out > W_out) return;
   b = blockIdx.z;
   float accum = 0.0;
