@@ -33,7 +33,7 @@ __global__ void conv_forward_kernel(float *y, const float *x, const float *k,
   int b, m, h_grid, w_grid, h_out, w_out, c, p, q;
   m = blockIdx.x;
   // compute the tile width of the image - how many tiles would fit across the image's width
-  int img_tile_width = ceil_div(W, TILE_WIDTH);
+  int img_tile_width = ceil_div(W_out, TILE_WIDTH);
   h_grid = blockIdx.y / img_tile_width;
   w_grid = blockIdx.y % img_tile_width;
   h_out = h_grid * TILE_WIDTH + threadIdx.y;
