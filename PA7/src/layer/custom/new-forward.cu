@@ -1,5 +1,5 @@
 #include "gpu-new-forward.h"
-#include <__clang_cuda_builtin_vars.h>
+// #include <__clang_cuda_builtin_vars.h>
 #include <cmath>
 #include <iostream>
 
