@@ -1,11 +1,11 @@
 #include "gpu-new-forward.h"
-#include <__clang_cuda_builtin_vars.h>
+// #include <__clang_cuda_builtin_vars.h>
 #include <cmath>
 #include <iostream>
 
 #define TILE_WIDTH 16
-#define ceil_div(X,Y) X % Y == 0 ? X / Y : X / Y + 1
-__global__ void conv_forward_kernel(float *y, const float *x, const float *k,
+#define ceil_div(X,Y) (X % Y == 0 ? X / Y : X / Y + 1)
+__global__ void conv_forward_kernel(float *y, const float * __restrict__ x, const float * __restrict__ k,
                                     const int B, const int M, const int C,
                                     const int H, const int W, const int K) {
 
@@ -31,15 +31,15 @@ __global__ void conv_forward_kernel(float *y, const float *x, const float *k,
 
   // map threadidx to b, m, h_out, w_out
   int b, m, h_grid, w_grid, h_out, w_out, c, p, q;
+  b = blockIdx.z;
   m = blockIdx.x;
   // compute the tile width of the image - how many tiles would fit across the image's width
-  int img_tile_width = ceil_div(W_out, TILE_WIDTH);
-  h_grid = blockIdx.y / img_tile_width;
-  w_grid = blockIdx.y % img_tile_width;
+  int W_grid = ceil_div(W_out, TILE_WIDTH);
+  h_grid = blockIdx.y / W_grid;
+  w_grid = blockIdx.y % W_grid;
   h_out = h_grid * TILE_WIDTH + threadIdx.y;
   w_out = w_grid * TILE_WIDTH + threadIdx.x;
   if (h_out > H_out || w_out > W_out) return;
-  b = blockIdx.z;
   float accum = 0.0;
   for (c = 0; c < C; ++c) {
     for (p = 0; p < K; ++p) {
