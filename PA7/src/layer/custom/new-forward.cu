@@ -18,10 +18,6 @@ __global__ void conv_forward_kernel(float *y, const float *x, const float *k,
 
   const int H_out = H - K + 1;
   const int W_out = W - K + 1;
-  (void)H_out; // silence declared but never referenced warning. remove this
-               // line when you start working
-  (void)W_out; // silence declared but never referenced warning. remove this
-               // line when you start working
 
 // An example use of these macros:
 // float a = y4d(0,0,0,0)
@@ -88,6 +84,9 @@ __host__ void GPUInterface::conv_forward_gpu_prolog(
   cudaMalloc(device_x_ptr, x_sz);
   cudaMalloc(device_y_ptr, y_sz);
   cudaMalloc(device_k_ptr, k_sz);
+
+  cudaMemcpy(*device_x_ptr, host_x, x_sz, cudaMemcpyHostToDevice);
+  cudaMemcpy(*device_k_ptr, host_k, k_sz, cudaMemcpyHostToDevice);
 }
 
 __host__ void GPUInterface::conv_forward_gpu(
