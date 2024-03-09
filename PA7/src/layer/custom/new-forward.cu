@@ -1,5 +1,5 @@
 #include "gpu-new-forward.h"
-// #include <__clang_cuda_builtin_vars.h>
+#include <__clang_cuda_builtin_vars.h>
 #include <cmath>
 #include <iostream>
 
@@ -46,7 +46,7 @@ __global__ void conv_forward_kernel(float *y, const float *x, const float *k,
       int h = h_out + p;
       for (q = 0; q < K; ++q) {
         int w = w_out + q;
-        accum += x4d(b, c, h, w) * k4d(m, c, h, w);
+        accum += x4d(b, c, h, w) * k4d(m, c, p, q);
       }
     }
   }
