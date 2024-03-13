@@ -4,76 +4,121 @@
 
 #define BLOCK_SIZE 16
 
-__global__ void conv_forward_kernel(float *y, const float *x, const float *k, const int B, const int M, const int C, const int H, const int W, const int K)
-{
-    /*
-    Modify this function to implement the forward pass described in Chapter 16.
-    We have added an additional dimension to the tensors to support an entire mini-batch
-    The goal here is to be correct AND fast.
-    Function paramter definitions:
-    y - output
-    x - input
-    k - kernel
-    B - batch_size (number of images in x)
-    M - number of output feature maps
-    C - number of input feature maps
-    H - input height dimension
-    W - input width dimension
-    K - kernel height and width (K x K)
-    */
+#define ceil_div(X,Y) (X % Y == 0 ? X / Y : X / Y + 1)
+__global__ void conv_forward_kernel(float *y, const float * __restrict__ x, const float * __restrict__ k,
+                                    const int B, const int M, const int C,
+                                    const int H, const int W, const int K) {
 
-    const int H_out = H - K + 1;
-    const int W_out = W - K + 1;
-    (void)H_out; // silence declared but never referenced warning. remove this line when you start working
-    (void)W_out; // silence declared but never referenced warning. remove this line when you start working
+  /*
+  Modify this function to implement the forward pass described in Chapter 16.
+  We have added an additional dimension to the tensors to support an entire
+  mini-batch The goal here is to be correct AND fast. We have some nice #defs
+  for you below to simplify indexing. Feel free to use them, or create your own.
+  */
 
-    // We have some nice #defs for you below to simplify indexing. Feel free to use them, or create your own.
-    // An example use of these macros:
-    // float a = y4d(0,0,0,0)
-    // y4d(0,0,0,0) = a
+  const int H_out = H - K + 1;
+  const int W_out = W - K + 1;
 
-#define y4d(i3, i2, i1, i0) y[(i3) * (M * H_out * W_out) + (i2) * (H_out * W_out) + (i1) * (W_out) + i0]
-#define x4d(i3, i2, i1, i0) x[(i3) * (C * H * W) + (i2) * (H * W) + (i1) * (W) + i0]
-#define k4d(i3, i2, i1, i0) k[(i3) * (C * K * K) + (i2) * (K * K) + (i1) * (K) + i0]
+// An example use of these macros:
+// float a = y4d(0,0,0,0)
+// y4d(0,0,0,0) = a
+#define y4d(i3, i2, i1, i0)                                                    \
+  y[(i3) * (M * H_out * W_out) + (i2) * (H_out * W_out) + (i1) * (W_out) + i0]
+#define x4d(i3, i2, i1, i0)                                                    \
+  x[(i3) * (C * H * W) + (i2) * (H * W) + (i1) * (W) + i0]
+#define k4d(i3, i2, i1, i0)                                                    \
+  k[(i3) * (C * K * K) + (i2) * (K * K) + (i1) * (K) + i0]
 
-    // Insert your GPU convolution kernel code here
-        
+  // map threadidx to b, m, h_out, w_out
+  int b, m, h_grid, w_grid, h_out, w_out, c, p, q;
+  b = blockIdx.z;
+  m = blockIdx.x;
+  // compute the tile width of the image - how many tiles would fit across the image's width
+  int W_grid = ceil_div(W_out, BLOCK_SIZE);
+  h_grid = blockIdx.y / W_grid;
+  w_grid = blockIdx.y % W_grid;
+  h_out = h_grid * BLOCK_SIZE + threadIdx.y;
+  w_out = w_grid * BLOCK_SIZE + threadIdx.x;
+  if (h_out >= H_out || w_out >= W_out) return;
+  float accum = 0.0;
+  for (c = 0; c < C; ++c) {
+    for (p = 0; p < K; ++p) {
+      int h = h_out + p;
+      for (q = 0; q < K; ++q) {
+        int w = w_out + q;
+        accum += x4d(b, c, h, w) * k4d(m, c, p, q);
+      }
+    }
+  }
+  y4d(b, m, h_out, w_out) = accum;
 
 #undef y4d
 #undef x4d
 #undef k4d
 }
 
-__host__ void GPUInterface::conv_forward_gpu_prolog(const float *host_y, const float *host_x, const float *host_k, float **device_y_ptr, float **device_x_ptr, float **device_k_ptr, const int B, const int M, const int C, const int H, const int W, const int K)
-{
-    // Allocate memory and copy over the relevant data structures to the GPU
+__host__ void GPUInterface::conv_forward_gpu_prolog(
+    const float *host_y, const float *host_x, const float *host_k,
+    float **device_y_ptr, float **device_x_ptr, float **device_k_ptr,
+    const int B, const int M, const int C, const int H, const int W,
+    const int K) {
+  // Allocate memory and copy over the relevant data structures to the GPU
 
-    // We pass double pointers for you to initialize the relevant device pointers,
-    //  which are passed to the other two functions.
+  // We pass double pointers for you to initialize the relevant device pointers,
+  //  which are passed to the other two functions.
 
-    // Useful snippet for error checking
-    // cudaError_t error = cudaGetLastError();
-    // if(error != cudaSuccess)
-    // {
-    //     std::cout<<"CUDA error: "<<cudaGetErrorString(error)<<std::endl;
-    //     exit(-1);
-    // }
-        
+  // Useful snippet for error checking
+  // cudaError_t error = cudaGetLastError();
+  // if(error != cudaSuccess)
+  // {
+  //     std::cout<<"CUDA error: "<<cudaGetErrorString(error)<<std::endl;
+  //     exit(-1);
+  // }
+
+  size_t x_sz, y_sz, k_sz;
+  x_sz = sizeof(float) * B * H * W * C;
+  const int H_out = H - (K - 1);
+  const int W_out = W - (K - 1);
+  y_sz = sizeof(float) * B * H_out * W_out * M;
+  k_sz = sizeof(float) * M * C * K * K;
+  cudaMalloc(device_x_ptr, x_sz);
+  cudaMalloc(device_y_ptr, y_sz);
+  cudaMalloc(device_k_ptr, k_sz);
+
+  cudaMemcpy(*device_x_ptr, host_x, x_sz, cudaMemcpyHostToDevice);
+  cudaMemcpy(*device_k_ptr, host_k, k_sz, cudaMemcpyHostToDevice);
 }
 
-__host__ void GPUInterface::conv_forward_gpu(float *device_y, const float *device_x, const float *device_k, const int B, const int M, const int C, const int H, const int W, const int K)
-{
-    // Set the kernel dimensions and call the kernel
-        
+__host__ void GPUInterface::conv_forward_gpu(
+    float *device_y, const float *device_x, const float *device_k, const int B,
+    const int M, const int C, const int H, const int W, const int K) {
+  // Set the kernel dimensions and call the kernel
 
+  const int H_out = H - (K - 1);
+  const int W_out = W - (K - 1);
+  unsigned int W_grid, H_grid;
+  H_grid = ceil_div(H_out, BLOCK_SIZE);
+  W_grid = ceil_div(W_out, BLOCK_SIZE);
+  dim3 gridDim{(unsigned int)M, H_grid * W_grid, (unsigned int)B};
+  dim3 blockDim{BLOCK_SIZE,BLOCK_SIZE};
+  conv_forward_kernel<<<gridDim,blockDim>>>(device_y, device_x, device_k, B, M, C, H, W, K);
 }
 
-__host__ void GPUInterface::conv_forward_gpu_epilog(float *host_y, float *device_y, float *device_x, float *device_k, const int B, const int M, const int C, const int H, const int W, const int K)
-{
-    // Copy the output back to host
-        
-    // Free device memory
-        
+__host__ void
+GPUInterface::conv_forward_gpu_epilog(float *host_y, float *device_y,
+                                      float *device_x, float *device_k,
+                                      const int B, const int M, const int C,
+                                      const int H, const int W, const int K) {
+  // Copy the output back to host
+  const int H_out = H - (K - 1);
+  const int W_out = W - (K - 1);
+  size_t y_sz = sizeof(float) * B * H_out * W_out * M;
+  cudaMemcpy(host_y, device_y, y_sz, cudaMemcpyDeviceToHost);
+
+  // Free device memory
+  cudaFree(device_y);
+  cudaFree(device_x);
+  cudaFree(device_k);
 }
 
 
