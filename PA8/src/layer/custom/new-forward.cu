@@ -58,7 +58,7 @@ __global__ void conv_forward_kernel(float *y, const float * __restrict__ x, cons
 
         // Do the same for in_tile, though this is more complicated...
         int unrolled_tile_thread_y = i * TW + threadIdx.y;
-        if (unrolled_tile_thread_x < W_out &&
+        if (unrolled_tile_thread_x < W_out * H_out &&
             unrolled_tile_thread_y < unrolled_kernel_width) {
             int in_y = (unrolled_tile_thread_y % (K * K)) / K +
                        unrolled_tile_thread_x / W_out;
@@ -70,10 +70,15 @@ __global__ void conv_forward_kernel(float *y, const float * __restrict__ x, cons
             in_tile[threadIdx.y][threadIdx.x] = 0;
         }
 
+        __syncthreads();
+
         // soom
         for(int j = 0; j < TW; ++j) {
             accumulator += k_tile[threadIdx.y][j] * in_tile[j][threadIdx.x];
         }
+
+        __syncthreads();
+
     }
 
     if (k_tile_thread_y < H_out && unrolled_tile_thread_x < W_out) {
