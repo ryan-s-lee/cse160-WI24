@@ -71,7 +71,7 @@ __global__ void conv_forward_kernel(float *y, const float * __restrict__ x, cons
         }
 
         // soom
-        for(int j = 0; j < unrolled_kernel_width; ++j) {
+        for(int j = 0; j < TW; ++j) {
             accumulator += k_tile[threadIdx.y][j] * in_tile[j][threadIdx.x];
         }
     }
