@@ -46,7 +46,8 @@ __global__ void conv_forward_kernel(float *y, const float * __restrict__ x, cons
     int k_tile_thread_y = blockIdx.y * TW + threadIdx.y;
     int unrolled_tile_thread_x = blockIdx.z * TW + threadIdx.x;
     float accumulator = 0.0;
-    for (int i = 0; i < ceil_div(unrolled_kernel_width, TW); ++i) {
+    int num_tiles = ceil_div(unrolled_kernel_width, TW);
+    for (int i = 0; i < num_tiles; ++i) {
         // Copy this thread's appropriate coordinate into k_tile
         int k_tile_thread_x = i * TW + threadIdx.x;
         if (k_tile_thread_x < unrolled_kernel_width && k_tile_thread_y < M) {
@@ -81,7 +82,7 @@ __global__ void conv_forward_kernel(float *y, const float * __restrict__ x, cons
 
     }
 
-    if (k_tile_thread_y < H_out && unrolled_tile_thread_x < W_out) {
+    if (k_tile_thread_y < M && unrolled_tile_thread_x < H_out * W_out) {
         y[(blockIdx.x * M + k_tile_thread_y) * H_out * W_out + unrolled_tile_thread_x] = accumulator;
     }
 
