@@ -131,7 +131,7 @@ __host__ void GPUInterface::conv_forward_gpu(
     const int conv_path_width = W - K + 1;
     const int conv_path_height = H - K + 1;
     const unsigned int unrolled_width = conv_path_width * conv_path_height;
-    const unsigned int unrolled_height = C * K * K;
+    const unsigned int unrolled_height = M;
     dim3 gridDim{(unsigned int)B, ceil_div(unrolled_height, TW),
                  ceil_div(unrolled_width, TW)};
     conv_forward_kernel<<<gridDim, blockDim>>>(device_y, device_x, device_k, B,
